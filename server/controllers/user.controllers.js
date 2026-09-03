@@ -1,4 +1,5 @@
 import User from "../models/user.model.js"
+import bcrypt from 'bcrypt'
 
 // Register Controller
 
@@ -31,11 +32,21 @@ export const resgiterUser = async (req, res) => {
         }
 
 
+        // Password Security
+
+       const salt =  await bcrypt.genSalt(10)
+       console.log(salt)
+
+       const hashedPassword =  await bcrypt.hash(password, salt)
+
+       console.log(hashedPassword)
+
+
         const newUser = await User.create({
             name,
             username,
             email,
-            password
+            password : hashedPassword
         })
 
         res.status(201).json({ message: "User Resgitered", user: newUser })
