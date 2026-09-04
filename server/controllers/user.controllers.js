@@ -1,7 +1,13 @@
 import User from "../models/user.model.js"
 import bcrypt from 'bcrypt'
+import { genToken } from "../utils/generateToken.js"
 
 // Register Controller
+
+const cookiesOptions = {
+    httpOnly: true,
+    secure: true
+}
 
 export const resgiterUser = async (req, res) => {
     try {
@@ -35,11 +41,11 @@ export const resgiterUser = async (req, res) => {
         // Password Security
 
         const salt = await bcrypt.genSalt(10)
-        console.log(salt)
+
 
         const hashedPassword = await bcrypt.hash(password, salt)
 
-        console.log(hashedPassword)
+
 
 
         const newUser = await User.create({
@@ -48,6 +54,14 @@ export const resgiterUser = async (req, res) => {
             email,
             password: hashedPassword
         })
+
+        // newUser._id
+
+        // token  - jwt  - access token 
+
+        const token = genToken(newUser._id)
+
+        res.cookie("token", token, cookiesOptions)
 
         res.status(201).json({ message: "User Resgitered", user: newUser })
 
@@ -66,7 +80,7 @@ export const loginUser = async (req, res) => {
             return res.status(404).json({ message: "User Not Found Please Register" })
         }
 
-       const passwordCheck = await bcrypt.compare(password, user.password)
+        const passwordCheck = await bcrypt.compare(password, user.password)
 
         console.log(passwordCheck)
 
@@ -81,4 +95,9 @@ export const loginUser = async (req, res) => {
     } catch (error) {
         res.status(500).json({ message: 'Internal Server Errorr', error: error })
     }
+}
+
+
+export const getUser = async (req, res) => {
+    res.status(200).json({ message: "User Authenticated", userData: req.user })
 }
