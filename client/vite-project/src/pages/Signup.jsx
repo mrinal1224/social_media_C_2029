@@ -6,6 +6,8 @@ import { axiosInstance } from '../axiosCalls/axios'
 function Signup() {
     const [form, setForm] = useState({ name: '', username: '', email: '', password: '' })
 
+    const [loader , setLoader] = useState(false)
+
 
     const handleChange = (e) => {
         setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }))
@@ -20,6 +22,11 @@ function Signup() {
           e.preventDefault()
           try {
            await axiosInstance.post('/users/register' , form) 
+           // Add all the validation errors
+           // Add a Loader
+
+
+
            console.log("User Registered")
           } catch (error) {
             console.log(error)
