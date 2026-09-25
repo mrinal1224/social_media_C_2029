@@ -4,6 +4,7 @@ import dotenv from 'dotenv'
 import userRoutes from './routes/user.routes.js'
 import cookieParser from 'cookie-parser'
 import cors from 'cors'
+import postRoutes from './routes/post.routes.js'
 
 
 
@@ -30,6 +31,7 @@ app.use(cors({
 app.use(express.json())
 app.use(cookieParser())
 app.use('/users' , userRoutes)
+app.use('/post' , postRoutes)
 
 
 
