@@ -5,6 +5,7 @@ import userRoutes from './routes/user.routes.js'
 import cookieParser from 'cookie-parser'
 import cors from 'cors'
 import postRoutes from './routes/post.routes.js'
+import reelRoutes from './routes/reel.routes.js'
 
 
 
@@ -32,6 +33,7 @@ app.use(express.json())
 app.use(cookieParser())
 app.use('/users' , userRoutes)
 app.use('/post' , postRoutes)
+app.use('/reel' , reelRoutes)
 
 
 
