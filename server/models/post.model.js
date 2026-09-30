@@ -1,4 +1,4 @@
-import mongoose, { Mongoose } from "mongoose";
+import mongoose from "mongoose";
 const postSchema = new mongoose.Schema({
   
  author:{
@@ -14,7 +14,17 @@ const postSchema = new mongoose.Schema({
 
  image:{
     type : String
- }
+ },
+
+
+ // Likes 
+
+ likes:[{
+    type : mongoose.Schema.Types.ObjectId,
+    ref : "User"
+ }]
+
+
   
 
 }, { timestamps: true })

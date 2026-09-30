@@ -90,6 +90,8 @@ function Home() {
 
     const formData = new FormData();
     formData.append("caption", caption.trim());
+
+
     if (selectedFile) formData.append(mediaType, selectedFile);
     publishingRef.current = true;
     setPublishing(true);
@@ -97,6 +99,8 @@ function Home() {
       const endpoint = contentType === "post" ? "post/createPost" : "reel/createReel";
       const { data } = await axiosInstance.post(endpoint, formData);
       const created = { ...data[contentType], type: contentType };
+
+      console.log(created)
       setFeed((current) => [created, ...current.filter((item) => item.type !== created.type || item._id !== created._id)]
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
       setCaption("");

@@ -15,6 +15,9 @@ const reelSchema = new mongoose.Schema({
  video:{
     type : String
  }
+
+
+  // Likes and Comments
   
 
 }, { timestamps: true })
