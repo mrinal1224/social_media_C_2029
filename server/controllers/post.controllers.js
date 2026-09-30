@@ -11,7 +11,7 @@ export const createPost = async (req, res) => {
 
         // write some validations
 
-        if (!caption.trim()) {
+        if (typeof caption !== "string" || !caption.trim()) {
             return res.status(400).json({ message: 'Please add a Caption' })
         }
 
@@ -37,7 +37,7 @@ export const createPost = async (req, res) => {
         })
 
         // add the postID inside posts array of the User
-        User.findByIdAndUpdate(req.user._id, {
+        await User.findByIdAndUpdate(req.user._id, {
             $push: { posts: postCreated.id }
         })
       // relate the post with userData(username , profileImage , name)
@@ -56,7 +56,7 @@ export const createPost = async (req, res) => {
 
 export const getPosts = async(req , res)=>{
      try {
-         const posts = await Post.find().populate('author' , "username profileImage" )
+         const posts = await Post.find().sort({ createdAt: -1 }).populate('author' , "name username profileImage" )
 
          if(!posts){
             res.status(404).json({message : "No posts found"})
