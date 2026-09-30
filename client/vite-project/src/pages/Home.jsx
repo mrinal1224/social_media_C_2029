@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { axiosInstance } from "../axiosCalls/axios";
 import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../context/AuthContext";
@@ -22,14 +23,100 @@ function Avatar({ initials, tone = "from-slate-700 to-slate-900", size = "h-11 w
 function Home() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  // UI-only composer. Post and reel APIs will be connected in class.
   const [contentType, setContentType] = useState("post");
   const [caption, setCaption] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
 
+  const fileInputRef = useRef(null);
+  const publishingRef = useRef(false);
+  const [feed, setFeed] = useState([]);
+  const [loadingFeed, setLoadingFeed] = useState(true);
+  const [feedError, setFeedError] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState("");
+  const [publishMessage, setPublishMessage] = useState("");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const loadFeed = async () => {
+      const results = await Promise.allSettled([
+        axiosInstance.get("post/getAllPosts", { signal: controller.signal }),
+        axiosInstance.get("reel/getAllReels", { signal: controller.signal }),
+      ]);
+      if (controller.signal.aborted) return;
+
+      const items = [];
+      const failed = [];
+      results.forEach((result, index) => {
+        const type = index === 0 ? "post" : "reel";
+        const records = result.status === "fulfilled" ? result.value.data[`${type}s`] : null;
+        if (Array.isArray(records)) {
+          items.push(...records.map((record) => ({ ...record, type })));
+        } else {
+          failed.push(`${type}s`);
+        }
+      });
+      setFeed((current) => [
+        ...current.filter((item) => failed.includes(`${item.type}s`)),
+        ...items,
+      ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+      setFeedError(failed.length ? `Could not load ${failed.join(" and ")}. Please try again.` : "");
+      setLoadingFeed(false);
+    };
+    loadFeed();
+    return () => controller.abort();
+  }, [refreshKey]);
+
+  const handlePublish = async (event) => {
+    event.preventDefault();
+    if (publishingRef.current || loadingFeed) return;
+    setPublishError("");
+    setPublishMessage("");
+    if (!caption.trim()) {
+      setPublishError("Please add a caption.");
+      return;
+    }
+    if (contentType === "reel" && !selectedFile) {
+      setPublishError("Please choose a video for your reel.");
+      return;
+    }
+    const mediaType = contentType === "post" ? "image" : "video";
+    const sizeLimit = contentType === "post" ? 5 : 50;
+    if (selectedFile && (!selectedFile.type.startsWith(`${mediaType}/`) || selectedFile.size > sizeLimit * 1024 * 1024)) {
+      setPublishError(`Choose a valid ${mediaType} no larger than ${sizeLimit} MB.`);
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("caption", caption.trim());
+    if (selectedFile) formData.append(mediaType, selectedFile);
+    publishingRef.current = true;
+    setPublishing(true);
+    try {
+      const endpoint = contentType === "post" ? "post/createPost" : "reel/createReel";
+      const { data } = await axiosInstance.post(endpoint, formData);
+      const created = { ...data[contentType], type: contentType };
+      setFeed((current) => [created, ...current.filter((item) => item.type !== created.type || item._id !== created._id)]
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+      setCaption("");
+      setSelectedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      setPublishMessage(contentType === "post" ? "Post published." : "Reel published.");
+    } catch (error) {
+      setPublishError(error.response?.data?.message || "Could not publish. Please try again.");
+    } finally {
+      publishingRef.current = false;
+      setPublishing(false);
+    }
+  };
+
   const handleContentTypeChange = (type) => {
     setContentType(type);
     setSelectedFile(null);
+    setPublishError("");
+    setPublishMessage("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const getInitials = (name) =>
@@ -115,96 +202,114 @@ function Home() {
             </div>
           </div>
 
-          {/* Post and reel composer UI; publishing will be connected in class. */}
+          {/* Publish images, text posts, and video reels using multipart FormData. */}
           <form
-            onSubmit={(event) => event.preventDefault()}
+            onSubmit={handlePublish}
             className="mb-5 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
           >
-            <div className="flex items-start gap-3">
-              <Avatar initials={getInitials(user?.name)} tone="from-indigo-500 to-violet-500" />
+            <fieldset disabled={publishing}>
+              <div className="flex items-start gap-3">
+                <Avatar initials={getInitials(user?.name)} tone="from-indigo-500 to-violet-500" />
 
-              <textarea
-                value={caption}
-                onChange={(event) => setCaption(event.target.value)}
-                maxLength={500}
-                rows={2}
-                placeholder={`What's on your mind, ${user?.name?.split(" ")[0] || "there"}?`}
-                className="flex-1 resize-none rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:bg-slate-100"
-              />
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
-              <button
-                type="button"
-                onClick={() => handleContentTypeChange("post")}
-                className={contentType === "post" ? "rounded-xl bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700" : "rounded-xl px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50"}
-              >
-                ▧ Post
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleContentTypeChange("reel")}
-                className={contentType === "reel" ? "rounded-xl bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700" : "rounded-xl px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50"}
-              >
-                ▶ Reel
-              </button>
-
-              <label className="cursor-pointer rounded-xl px-3 py-2 text-xs font-semibold text-slate-500 transition hover:bg-slate-50">
-                {contentType === "post" ? "Choose Image" : "Choose Video"}
-                <input
-                  type="file"
-                  accept={contentType === "post" ? "image/*" : "video/*"}
-                  onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
-                  className="hidden"
+                <textarea
+                  aria-label="Caption"
+                  value={caption}
+                  onChange={(event) => setCaption(event.target.value)}
+                  maxLength={500}
+                  rows={2}
+                  placeholder={`What's on your mind, ${user?.name?.split(" ")[0] || "there"}?`}
+                  className="flex-1 resize-none rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:bg-slate-100"
                 />
-              </label>
+              </div>
 
-              <button
-                type="submit"
-                disabled
-                title="Publishing will be added in class"
-                className="ml-auto rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {contentType === "post" ? "Create Post" : "Create Reel"}
-              </button>
-            </div>
+              <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+                <button
+                  type="button"
+                  onClick={() => handleContentTypeChange("post")}
+                  className={contentType === "post" ? "rounded-xl bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700" : "rounded-xl px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50"}
+                >
+                  ▧ Post
+                </button>
 
-            {selectedFile && (
-              <p className="mt-2 text-xs text-slate-500">Selected: {selectedFile.name}</p>
-            )}
+                <button
+                  type="button"
+                  onClick={() => handleContentTypeChange("reel")}
+                  className={contentType === "reel" ? "rounded-xl bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700" : "rounded-xl px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50"}
+                >
+                  ▶ Reel
+                </button>
 
+                <label className="cursor-pointer rounded-xl px-3 py-2 text-xs font-semibold text-slate-500 transition hover:bg-slate-50">
+                  {contentType === "post" ? "Choose Image" : "Choose Video"}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={contentType === "post" ? "image/*" : "video/*"}
+                    onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
+                    className="hidden"
+                  />
+                </label>
 
+                <button
+                  type="submit"
+                  disabled={publishing || loadingFeed || !caption.trim() || (contentType === "reel" && !selectedFile)}
+                  className="ml-auto rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {publishing ? "Publishing…" : contentType === "post" ? "Create Post" : "Create Reel"}
+                </button>
+              </div>
+
+              {selectedFile && (
+                <p className="mt-2 text-xs text-slate-500">Selected: {selectedFile.name}</p>
+              )}
+            </fieldset>
+            {publishError && <p role="alert" className="mt-3 text-sm text-red-600">{publishError}</p>}
+            {publishMessage && <p role="status" className="mt-3 text-sm text-emerald-700">{publishMessage}</p>}
           </form>
 
-          {/* Static preview: replace this card with API data during the feed lesson. */}
-          <div className="space-y-5">
-            <article className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-              <div className="flex items-center justify-between px-5 py-4">
-                <div className="flex items-center gap-3">
-                  <Avatar initials="SS" tone="from-pink-500 to-rose-500" />
-                  <div>
-                    <p className="text-sm font-bold">SST Social</p>
-                    <p className="text-xs text-slate-400">@sstsocial · Just now</p>
-                  </div>
-                </div>
-                <button type="button" className="rounded-full px-2 py-1 text-lg leading-none text-slate-400 hover:bg-slate-50">•••</button>
+          <div className="space-y-5" aria-busy={loadingFeed}>
+            {loadingFeed && <p role="status" className="p-5 text-center text-sm text-slate-500">Loading your feed…</p>}
+            {feedError && (
+              <div role="alert" className="rounded-2xl bg-red-50 p-4 text-sm text-red-700">
+                {feedError}
+                <button type="button" disabled={loadingFeed || publishing} onClick={() => {
+                  setLoadingFeed(true);
+                  setFeedError("");
+                  setRefreshKey((key) => key + 1);
+                }} className="ml-3 font-bold underline disabled:opacity-50">Retry</button>
               </div>
-              <div className="flex min-h-72 items-center justify-center bg-gradient-to-br from-indigo-500 via-violet-500 to-pink-500 px-8 text-center text-3xl font-black text-white sm:min-h-96">
-                Your circle, your feed.
-              </div>
-              <div className="px-5 pb-5 pt-4">
-                <p className="text-sm leading-6 text-slate-700">Welcome to SST Social! Posts and reels from your circle will appear here soon.</p>
-                <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
-                  <span>0 likes</span><span>0 comments</span>
+            )}
+            {!loadingFeed && !feedError && feed.length === 0 && (
+              <p className="rounded-3xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">No posts or reels yet. Share the first one!</p>
+            )}
+            {feed.map((item) => (
+              <article key={`${item.type}-${item._id}`} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                <div className="flex items-center justify-between px-5 py-4">
+                  <button type="button" disabled={!item.author?.username} onClick={() => navigate(`/profile/${item.author.username}`)} className="flex items-center gap-3 text-left">
+                    {item.author?.profileImage ? (
+                      <img src={item.author.profileImage} alt="" className="h-11 w-11 rounded-full object-cover" />
+                    ) : (
+                      <Avatar initials={getInitials(item.author?.name || item.author?.username)} tone="from-pink-500 to-rose-500" />
+                    )}
+                    <div>
+                      <p className="text-sm font-bold">{item.author?.name || item.author?.username || "Unknown user"}</p>
+                      <p className="text-xs text-slate-400">
+                        {item.author?.username ? `@${item.author.username} · ` : ""}
+                        {item.createdAt && <time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString()}</time>}
+                      </p>
+                    </div>
+                  </button>
+                  <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">{item.type === "reel" ? "Reel" : "Post"}</span>
                 </div>
-                <div className="mt-4 flex border-t border-slate-100 pt-3">
-                  <button type="button" className="flex-1 rounded-xl py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">♡ Like</button>
-                  <button type="button" className="flex-1 rounded-xl py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">◌ Comment</button>
-                  <button type="button" className="flex-1 rounded-xl py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">↗ Share</button>
-                </div>
-              </div>
-            </article>
+                {item.type === "reel" && item.video && (
+                  <video src={item.video} controls playsInline preload="metadata" aria-label={item.caption || "Reel"} className="max-h-[600px] w-full bg-black" />
+                )}
+                {item.type === "post" && item.image && (
+                  <img src={item.image} alt={item.caption || "Post image"} loading="lazy" className="max-h-[600px] w-full object-contain bg-slate-50" />
+                )}
+                <p className="whitespace-pre-wrap break-words px-5 pb-5 pt-4 text-sm leading-6 text-slate-700">{item.caption}</p>
+              </article>
+            ))}
           </div>
         </section>
 
