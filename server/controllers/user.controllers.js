@@ -248,6 +248,6 @@ export const upadteProfile = async (req, res) => {
 
 
     } catch (error) {
-
+        return res.status(500).json({ message: 'Internal Server Errorr', error })
     }
 }

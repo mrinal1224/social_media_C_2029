@@ -53,3 +53,20 @@ export const createReel = async (req, res) => {
         res.status(500).json({ message: "Internal Server Error", error : error })
     }
 }
+
+export const getReels = async(req , res)=>{
+    try {
+        const reels= await Reel.find().populate('author' , "username profileImage" )
+
+        if(!reels){
+           res.status(404).json({message : "No reels found"})
+        }
+
+
+        res.status(200).json({message : "Reels Found" , reels : reels})
+
+
+    } catch (error) {
+       return res.status(500).json({ message: 'Internal Server Errorr', error })
+    }
+}

@@ -50,6 +50,23 @@ export const createPost = async (req, res) => {
         res.status(201).json({ message: "Post Created", post: populatedPost })
 
     } catch (error) {
-
+        return res.status(500).json({ message: 'Internal Server Errorr', error })
     }
+}
+
+export const getPosts = async(req , res)=>{
+     try {
+         const posts = await Post.find().populate('author' , "username profileImage" )
+
+         if(!posts){
+            res.status(404).json({message : "No posts found"})
+         }
+
+
+         res.status(200).json({message : "Posts Found" , posts : posts})
+
+
+     } catch (error) {
+        return res.status(500).json({ message: 'Internal Server Errorr', error })
+     }
 }
