@@ -96,6 +96,10 @@ export const updateLikes = async (req, res) => {
             post.likes.push(userId)
         }
 
+        await post.save()
+
+  
+
 
         res.status(200).json({ message: alreadyLiked ? "Unliked" : "Liked", count: post.likes.length })
 
@@ -105,3 +109,5 @@ export const updateLikes = async (req, res) => {
         return res.status(500).json({ message: 'Internal Server Errorr', error })
     }
 }
+
+      // try to get out the username from the userId stored
