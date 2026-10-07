@@ -8,6 +8,9 @@ function Profile() {
     const navigate = useNavigate()
     const { user: loggedInUser, setUser } = useAuth()
     const [userData, setUserData] = useState(null)
+    // PRE-REDUX: keep profile posts in local component state.
+    // Later this state can be moved to Redux so multiple pages can share it.
+    const [profilePosts, setProfilePosts] = useState([])
     const [loading, setLoading] = useState(true)
     const [isFollowing, setIsFollowing] = useState(false)
     const [actionLoading, setActionLoading] = useState(false)
@@ -38,7 +41,14 @@ function Profile() {
                 setLoading(true)
 
                 const profile = await fetchProfile()
-                if (!profile || isOwnProfile) return
+                if (!profile) return
+
+                // PRE-REDUX DATA FLOW:
+                // Profile owns its own API call and stores the result locally.
+                const postsResponse = await axiosInstance.get(`/post/user/${username}`)
+                setProfilePosts(postsResponse.data.posts || [])
+
+                if (isOwnProfile) return
 
                 const meResponse = await axiosInstance.get('/users/me')
                 const myFollowingList = meResponse.data.followings || []
@@ -253,7 +263,7 @@ function Profile() {
             <div className="flex justify-around items-center pt-4 border-t border-gray-100 text-center">
                 <div className="flex-1">
                     <span className="block text-xl font-bold text-gray-900">
-                        {userData.posts?.length ?? userData.postsCount ?? 0}
+                        {profilePosts.length}
                     </span>
                     <span className="text-xs text-gray-500 font-medium">Posts</span>
                 </div>
@@ -301,6 +311,43 @@ function Profile() {
                         ))
                     )}
                 </div>
+            </div>
+
+            {/* PRE-REDUX: render posts fetched directly by this page. */}
+            <div className="mt-8 border-t border-gray-100 pt-6">
+                <div className="mb-4 flex items-center justify-between">
+                    <h2 className="text-lg font-bold text-gray-900">Posts</h2>
+                    <span className="text-sm text-gray-500">{profilePosts.length} posts</span>
+                </div>
+
+                {profilePosts.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-gray-200 py-10 text-center text-sm text-gray-500">
+                        No posts yet.
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        {profilePosts.map((post) => (
+                            <article key={post._id} className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+                                {post.image && (
+                                    <img
+                                        src={post.image}
+                                        alt={post.caption || 'Post'}
+                                        className="h-52 w-full object-cover"
+                                    />
+                                )}
+                                <div className="p-4">
+                                    {post.caption && (
+                                        <p className="text-sm leading-relaxed text-gray-700">{post.caption}</p>
+                                    )}
+                                    <div className="mt-3 flex items-center justify-between text-xs text-gray-400">
+                                        <span>{post.likes?.length || 0} likes</span>
+                                        <span>{new Date(post.createdAt).toLocaleDateString()}</span>
+                                    </div>
+                                </div>
+                            </article>
+                        ))}
+                    </div>
+                )}
             </div>
 
             {isOwnProfile && isEditOpen && (
