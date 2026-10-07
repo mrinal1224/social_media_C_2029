@@ -11,6 +11,8 @@ function Profile() {
     // PRE-REDUX: keep profile posts in local component state.
     // Later this state can be moved to Redux so multiple pages can share it.
     const [profilePosts, setProfilePosts] = useState([])
+    const [profileReels, setProfileReels] = useState([])
+    const [activeTab, setActiveTab] = useState('posts')
     const [loading, setLoading] = useState(true)
     const [isFollowing, setIsFollowing] = useState(false)
     const [actionLoading, setActionLoading] = useState(false)
@@ -47,6 +49,9 @@ function Profile() {
                 // Profile owns its own API call and stores the result locally.
                 const postsResponse = await axiosInstance.get(`/post/user/${username}`)
                 setProfilePosts(postsResponse.data.posts || [])
+
+                const reelsResponse = await axiosInstance.get(`/reel/user/${username}`)
+                setProfileReels(reelsResponse.data.reels || [])
 
                 if (isOwnProfile) return
 
@@ -313,40 +318,69 @@ function Profile() {
                 </div>
             </div>
 
-            {/* PRE-REDUX: render posts fetched directly by this page. */}
+            {/* PRE-REDUX: both tabs use data fetched directly into local component state. */}
             <div className="mt-8 border-t border-gray-100 pt-6">
-                <div className="mb-4 flex items-center justify-between">
-                    <h2 className="text-lg font-bold text-gray-900">Posts</h2>
-                    <span className="text-sm text-gray-500">{profilePosts.length} posts</span>
+                <div className="mb-5 flex border-b border-gray-200">
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('posts')}
+                        className={`flex-1 border-b-2 px-4 py-3 text-sm font-semibold transition ${activeTab === 'posts' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+                    >
+                        Posts ({profilePosts.length})
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('reels')}
+                        className={`flex-1 border-b-2 px-4 py-3 text-sm font-semibold transition ${activeTab === 'reels' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+                    >
+                        Reels ({profileReels.length})
+                    </button>
                 </div>
 
-                {profilePosts.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-gray-200 py-10 text-center text-sm text-gray-500">
-                        No posts yet.
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        {profilePosts.map((post) => (
-                            <article key={post._id} className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
-                                {post.image && (
-                                    <img
-                                        src={post.image}
-                                        alt={post.caption || 'Post'}
-                                        className="h-52 w-full object-cover"
-                                    />
-                                )}
-                                <div className="p-4">
-                                    {post.caption && (
-                                        <p className="text-sm leading-relaxed text-gray-700">{post.caption}</p>
-                                    )}
-                                    <div className="mt-3 flex items-center justify-between text-xs text-gray-400">
-                                        <span>{post.likes?.length || 0} likes</span>
-                                        <span>{new Date(post.createdAt).toLocaleDateString()}</span>
+                {activeTab === 'posts' && (
+                    profilePosts.length === 0 ? (
+                        <div className="rounded-lg border border-dashed border-gray-200 py-10 text-center text-sm text-gray-500">
+                            No posts yet.
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            {profilePosts.map((post) => (
+                                <article key={post._id} className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+                                    {post.image && <img src={post.image} alt={post.caption || 'Post'} className="h-52 w-full object-cover" />}
+                                    <div className="p-4">
+                                        {post.caption && <p className="text-sm leading-relaxed text-gray-700">{post.caption}</p>}
+                                        <div className="mt-3 flex items-center justify-between text-xs text-gray-400">
+                                            <span>{post.likes?.length || 0} likes</span>
+                                            <span>{new Date(post.createdAt).toLocaleDateString()}</span>
+                                        </div>
                                     </div>
-                                </div>
-                            </article>
-                        ))}
-                    </div>
+                                </article>
+                            ))}
+                        </div>
+                    )
+                )}
+
+                {activeTab === 'reels' && (
+                    profileReels.length === 0 ? (
+                        <div className="rounded-lg border border-dashed border-gray-200 py-10 text-center text-sm text-gray-500">
+                            No reels yet.
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            {profileReels.map((reel) => (
+                                <article key={reel._id} className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+                                    <video src={reel.video} controls className="h-72 w-full bg-black object-contain" />
+                                    <div className="p-4">
+                                        {reel.caption && <p className="text-sm leading-relaxed text-gray-700">{reel.caption}</p>}
+                                        <div className="mt-3 flex items-center justify-between text-xs text-gray-400">
+                                            <span>{reel.likes?.length || 0} likes</span>
+                                            <span>{new Date(reel.createdAt).toLocaleDateString()}</span>
+                                        </div>
+                                    </div>
+                                </article>
+                            ))}
+                        </div>
+                    )
                 )}
             </div>
 
