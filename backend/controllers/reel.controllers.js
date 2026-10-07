@@ -84,6 +84,31 @@ export const getReels = async (req, res) => {
     }
 };
 
+
+export const getReelsByUsername = async (req, res) => {
+    try {
+        const user = await User.findOne({ username: req.params.username }).select("_id");
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        const reels = await Reel.find({ author: user._id })
+            .populate("author", "name username profileImage")
+            .sort({ createdAt: -1 });
+
+        return res.status(200).json({
+            message: "User reels fetched successfully",
+            reels
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: "Internal Server Error",
+            error: error.message
+        });
+    }
+};
+
 export const updateLikes = async (req, res) => {
     try {
         const reel = await Reel.findById(req.params.id);
