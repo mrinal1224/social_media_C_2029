@@ -1,15 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useDispatch, useSelector } from "react-redux";
 import axiosInstance from "../axiosCalls/axios";
 import { useAuth } from "../context/AuthContext";
-import {
-  addPost,
-  fetchFeedPosts,
-  updatePostLike,
-} from "../redux/postsSlice";
-import { addReel, fetchReels, updateReelLike } from "../redux/reelsSlice";
-import { addStory, fetchStories } from "../redux/storiesSlice";
 
 function Avatar({ initials, tone = "from-slate-700 to-slate-900", size = "h-11 w-11" }) {
   return (
@@ -24,26 +16,12 @@ const getLikeId = (like) => like?._id || like;
 function Home() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-
-  // REDUX STEP 5: GET ACCESS TO THE STORE
-  //
-  // dispatch sends an action to Redux.
-  // useSelector reads data from Redux.
-  //
-  // WHY:
-  // "posts" no longer belongs to Home.jsx.
-  // Home is now only a CONSUMER of the application-level posts state.
-  const dispatch = useDispatch();
-  const posts = useSelector((state) => state.posts.items);
-  const postsLoading = useSelector((state) => state.posts.loading);
-  const postsError = useSelector((state) => state.posts.error);
-
-  const reels = useSelector((state) => state.reels.items);
-  const reelsLoading = useSelector((state) => state.reels.loading);
-  const reelsError = useSelector((state) => state.reels.error);
-  const stories = useSelector((state) => state.stories.items);
-  const storyLoading = useSelector((state) => state.stories.loading);
-  const storyStoreError = useSelector((state) => state.stories.error);
+  const [posts, setPosts] = useState([]);
+  const [reels, setReels] = useState([]);
+  const [feedLoading, setFeedLoading] = useState(true);
+  const [feedError, setFeedError] = useState("");
+  const [stories, setStories] = useState([]);
+  const [storyLoading, setStoryLoading] = useState(true);
   const [storyError, setStoryError] = useState("");
   const [storyFile, setStoryFile] = useState(null);
   const [storyCaption, setStoryCaption] = useState("");
@@ -78,13 +56,69 @@ function Home() {
     );
   };
 
-  // Home hydrates shared server resources into Redux. The same entities are
-  // then reused by Profile instead of creating page-specific copies.
+  // HOME FEED FETCH:
+  // Keep the flow simple: fetch posts first, then fetch reels.
+  // Each request has its own error handling so one API failing does not stop
+  // the other content type from being loaded.
   useEffect(() => {
-    dispatch(fetchFeedPosts());
-    dispatch(fetchReels());
-    dispatch(fetchStories());
-  }, [dispatch]);
+    const fetchPosts = async () => {
+      try {
+        const response = await axiosInstance.get("/post");
+        setPosts(response.data.posts || []);
+      } catch (error) {
+        console.error("Posts fetch failed:", error);
+        setFeedError(
+          error.response?.data?.message || "Unable to load posts."
+        );
+      }
+    };
+
+    const fetchReels = async () => {
+      try {
+        const response = await axiosInstance.get("/reel");
+        setReels(response.data.reels || []);
+      } catch (error) {
+        console.error("Reels fetch failed:", error);
+        setFeedError(
+          error.response?.data?.message || "Unable to load reels."
+        );
+      }
+    };
+
+    const loadFeed = async () => {
+      try {
+        setFeedLoading(true);
+        setFeedError("");
+
+        await fetchPosts();
+        await fetchReels();
+      } finally {
+        setFeedLoading(false);
+      }
+    };
+
+    loadFeed();
+  }, []);
+
+  // STORIES:
+  // Fetch active stories from people the current user follows.
+  useEffect(() => {
+    const fetchStories = async () => {
+      try {
+        setStoryLoading(true);
+        setStoryError("");
+        const response = await axiosInstance.get("/story/getStories");
+        setStories(response.data.stories || []);
+      } catch (error) {
+        console.error("Stories fetch failed:", error);
+        setStoryError(error.response?.data?.message || "Unable to load stories.");
+      } finally {
+        setStoryLoading(false);
+      }
+    };
+
+    fetchStories();
+  }, []);
 
   const handleCreateStory = async (event) => {
     event.preventDefault();
@@ -102,8 +136,8 @@ function Home() {
       formData.append("caption", storyCaption.trim());
       formData.append("image", storyFile);
 
-      const response = await axiosInstance.post("/stories/createStory", formData);
-      dispatch(addStory(response.data.story));
+      const response = await axiosInstance.post("/story/createStory", formData);
+      setStories((prevStories) => [response.data.story, ...prevStories]);
       setStoryFile(null);
       setStoryCaption("");
       event.target.reset();
@@ -149,16 +183,11 @@ function Home() {
       }
 
       if (contentType === "post") {
-        const response = await axiosInstance.post("/posts", formData);
-
-        // REDUX STEP 7: ADD CREATED POST TO THE SHARED STORE
-        //
-        // Home does not maintain its own posts array anymore.
-        // dispatch(addPost(...)) changes the single shared source of truth.
-        dispatch(addPost(response.data.post));
+        const response = await axiosInstance.post("/post/create", formData);
+        setPosts((prevPosts) => [response.data.post, ...prevPosts]);
       } else {
-        const response = await axiosInstance.post("/reels", formData);
-        dispatch(addReel(response.data.reel));
+        const response = await axiosInstance.post("/reel/createReel", formData);
+        setReels((prevReels) => [response.data.reel, ...prevReels]);
       }
 
       setCaption("");
@@ -208,36 +237,32 @@ function Home() {
 
   const handleLike = async (type, id) => {
     const key = getItemKey(type, id);
+    const setItems = type === "post" ? setPosts : setReels;
 
     try {
       setLikeLoading((prev) => ({ ...prev, [key]: true }));
       setInteractionError((prev) => ({ ...prev, [key]: "" }));
 
-      // Posts and reels use different backend resources.
-      // Only Post state is shared through Redux in this lesson.
-      const endpoint =
-        type === "post"
-          ? `/posts/${id}/like`
-          : `/reels/${id}/like`;
-
-      const response = await axiosInstance.patch(endpoint);
+      const response = await axiosInstance.post(`/${type}/likes/${id}`);
       const liked = response.data.liked;
 
-      if (type === "post") {
-        // REDUX STEP 8: UPDATE THE SHARED POST, NOT A PAGE COPY
-        //
-        // This action changes Post #123 in the Redux store.
-        // Any component selecting that post from Redux receives the update.
-        dispatch(
-          updatePostLike({
-            postId: id,
-            userId: user?._id,
-            liked,
-          })
-        );
-      } else {
-        dispatch(updateReelLike({ reelId: id, userId: user?._id, liked }));
-      }
+      setItems((items) =>
+        items.map((item) => {
+          if (item._id !== id) return item;
+
+          const currentLikes = item.likes || [];
+          const likesWithoutCurrentUser = currentLikes.filter(
+            (like) => getLikeId(like)?.toString() !== user?._id?.toString()
+          );
+
+          return {
+            ...item,
+            likes: liked && user?._id
+              ? [...likesWithoutCurrentUser, user._id]
+              : likesWithoutCurrentUser,
+          };
+        })
+      );
     } catch (error) {
       console.error("Like update failed:", error);
       setInteractionError((prev) => ({
@@ -263,7 +288,7 @@ function Home() {
       setCommentLoading((prev) => ({ ...prev, [key]: true }));
       setInteractionError((prev) => ({ ...prev, [key]: "" }));
 
-      const response = await axiosInstance.get(`/comments/${type}/${id}`);
+      const response = await axiosInstance.get(`/comment/${type}/${id}`);
 
       setCommentsByItem((prev) => ({
         ...prev,
@@ -292,7 +317,7 @@ function Home() {
       setCommentLoading((prev) => ({ ...prev, [key]: true }));
       setInteractionError((prev) => ({ ...prev, [key]: "" }));
 
-      const response = await axiosInstance.post(`/comments/${type}/${id}`, {
+      const response = await axiosInstance.post(`/comment/${type}/${id}`, {
         text,
       });
 
@@ -321,7 +346,7 @@ function Home() {
 
     try {
       setInteractionError((prev) => ({ ...prev, [key]: "" }));
-      await axiosInstance.delete(`/comments/${commentId}`);
+      await axiosInstance.delete(`/comment/${commentId}`);
 
       setCommentsByItem((prev) => ({
         ...prev,
@@ -578,7 +603,7 @@ function Home() {
                 </button>
               </form>
 
-              {(storyError || storyStoreError) && <p className="mb-3 text-xs text-red-500">{storyError || storyStoreError}</p>}
+              {storyError && <p className="mb-3 text-xs text-red-500">{storyError}</p>}
 
               {storyLoading ? (
                 <p className="text-xs text-slate-400">Loading stories...</p>
@@ -678,19 +703,19 @@ function Home() {
           </form>
 
           <div className="space-y-5">
-            {postsLoading || reelsLoading && (
+            {feedLoading && (
               <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-sm">
                 Loading your feed...
               </div>
             )}
 
-            {!postsLoading || reelsLoading && postsError || reelsError && (
+            {!feedLoading && feedError && (
               <div className="rounded-3xl border border-red-100 bg-red-50 p-5 text-sm text-red-600 shadow-sm">
-                {postsError || reelsError}
+                {feedError}
               </div>
             )}
 
-            {!postsLoading || reelsLoading && !postsError || reelsError && posts.length === 0 && reels.length === 0 && (
+            {!feedLoading && !feedError && posts.length === 0 && reels.length === 0 && (
               <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
                 <p className="font-bold text-slate-700">Your feed is empty</p>
                 <p className="mt-1 text-sm text-slate-500">
@@ -699,7 +724,7 @@ function Home() {
               </div>
             )}
 
-            {/* POSTS: render real API data returned by GET /posts/feed. */}
+            {/* POSTS: render real API data returned by GET /post. */}
             {posts.map((post) => (
               <article
                 key={post._id}
@@ -750,7 +775,7 @@ function Home() {
               </article>
             ))}
 
-            {/* REELS: render real API data returned by GET /reels. */}
+            {/* REELS: render real API data returned by GET /reel. */}
             {reels.map((reel) => (
               <article
                 key={reel._id}

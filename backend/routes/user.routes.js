@@ -5,9 +5,9 @@ import {
     logoutUser,
     getMe,
     getUserProfile,
-    updateProfile,
     followUser,
-    unfollowUser
+    unfollowUser,
+    updateProfile
 } from "../controllers/user.controllers.js";
 import isAuthenticated from "../middlewares/authMiddleware.js";
 import upload from "../middlewares/upload.middleware.js";
@@ -20,14 +20,10 @@ userRoutes.post("/logout", isAuthenticated, logoutUser);
 userRoutes.get("/me", isAuthenticated, getMe);
 userRoutes.get("/profile/:username", isAuthenticated, getUserProfile);
 
-userRoutes.put(
-    "/profile",
-    isAuthenticated,
-    upload.single("profileImage"),
-    updateProfile
-);
-
+// Following and followers
 userRoutes.post("/:id/follow", isAuthenticated, followUser);
 userRoutes.delete("/:id/follow", isAuthenticated, unfollowUser);
+
+userRoutes.post('/updateProfile', isAuthenticated,   upload.single('profileImage'), updateProfile)
 
 export default userRoutes;

@@ -39,7 +39,6 @@ export const AuthProvider = ({ children }) => {
       await axiosInstance.post("/users/logout");
     } finally {
       setUser(null);
-      setLoading(false);
     }
   };
 

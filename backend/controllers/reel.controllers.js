@@ -2,7 +2,7 @@ import Reel from "../models/reel.model.js";
 import User from "../models/user.model.js";
 import cloudinary from "../utils/cloudinary.js";
 
-const uploadVideoToCloudinary = (buffer) => {
+const uploadReelToCloudinary = (buffer) => {
     return new Promise((resolve, reject) => {
         const uploadStream = cloudinary.uploader.upload_stream(
             {
@@ -23,7 +23,7 @@ const uploadVideoToCloudinary = (buffer) => {
     });
 };
 
-export const createReel = async (req, res, next) => {
+export const createReel = async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({
@@ -31,19 +31,19 @@ export const createReel = async (req, res, next) => {
             });
         }
 
-        const { caption } = req.body;
+        const caption = req.body.caption?.trim() || "";
 
-        if (caption && caption.trim().length > 500) {
+        if (caption.length > 500) {
             return res.status(400).json({
                 message: "Caption cannot exceed 500 characters"
             });
         }
 
-        const uploadedVideo = await uploadVideoToCloudinary(req.file.buffer);
+        const uploadedVideo = await uploadReelToCloudinary(req.file.buffer);
 
         const reel = await Reel.create({
             author: req.user._id,
-            caption: caption?.trim() || "",
+            caption,
             video: uploadedVideo.secure_url
         });
 
@@ -55,69 +55,49 @@ export const createReel = async (req, res, next) => {
             .populate("author", "name username profileImage");
 
         return res.status(201).json({
-            message: "Reel created successfully",
+            message: "Reel Created",
             reel: populatedReel
         });
     } catch (error) {
-        next(error);
+        return res.status(500).json({
+            message: "Internal Server Error",
+            error: error.message
+        });
     }
 };
 
-export const getReels = async (req, res, next) => {
+export const getReels = async (req, res) => {
     try {
         const reels = await Reel.find()
-            .sort({ createdAt: -1 })
-            .populate("author", "name username profileImage");
+            .populate("author", "name username profileImage")
+            .sort({ createdAt: -1 });
 
         return res.status(200).json({
             message: "Reels fetched successfully",
             reels
         });
     } catch (error) {
-        next(error);
-    }
-};
-
-
-export const getReelsByUsername = async (req, res, next) => {
-    try {
-        const user = await User.findOne({ username: req.params.username }).select("_id");
-
-        if (!user) {
-            return res.status(404).json({
-                message: "User not found"
-            });
-        }
-
-        const reels = await Reel.find({ author: user._id })
-            .sort({ createdAt: -1 })
-            .populate("author", "name username profileImage");
-
-        return res.status(200).json({
-            message: "User reels fetched successfully",
-            reels
+        return res.status(500).json({
+            message: "Internal Server Error",
+            error: error.message
         });
-    } catch (error) {
-        next(error);
     }
 };
 
-export const toggleReelLike = async (req, res, next) => {
+export const updateLikes = async (req, res) => {
     try {
         const reel = await Reel.findById(req.params.id);
 
         if (!reel) {
-            return res.status(404).json({
-                message: "Reel not found"
-            });
+            return res.status(404).json({ message: "No Reel Found" });
         }
 
         const userId = req.user._id;
-        const alreadyLiked = reel.likes.some(
+        const isAlreadyLiked = reel.likes.some(
             (id) => id.toString() === userId.toString()
         );
 
-        if (alreadyLiked) {
+        if (isAlreadyLiked) {
             reel.likes.pull(userId);
         } else {
             reel.likes.push(userId);
@@ -126,11 +106,16 @@ export const toggleReelLike = async (req, res, next) => {
         await reel.save();
 
         return res.status(200).json({
-            message: alreadyLiked ? "Reel unliked" : "Reel liked",
-            liked: !alreadyLiked,
-            likesCount: reel.likes.length
+            message: isAlreadyLiked ? "Reel Unliked" : "Reel Liked",
+            likes: reel.likes.length,
+            liked: !isAlreadyLiked
         });
+
+        // Populate the user with username
     } catch (error) {
-        next(error);
+        return res.status(500).json({
+            message: "Internal Server Error",
+            error: error.message
+        });
     }
 };

@@ -52,12 +52,7 @@ const userSchema = new mongoose.Schema(
         ],
         // people I follow
         posts: [],
-        stories: [
-            {
-                type: mongoose.Schema.Types.ObjectId,
-                ref: "Story"
-            }
-        ],
+        stories: [],
         reels: [],
 
         profileImage: {

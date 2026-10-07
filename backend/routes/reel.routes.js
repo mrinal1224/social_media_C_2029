@@ -1,38 +1,19 @@
-import express from "express";
-import uploadReel from "../middlewares/reelUpload.middleware.js";
-import {
-    createReel,
-    getReels,
-    getReelsByUsername,
-    toggleReelLike
-} from "../controllers/reel.controllers.js";
-import isAuthenticated from "../middlewares/authMiddleware.js";
+import express from 'express'
+import isAuthenticated from '../middlewares/authMiddleware.js';
+
+import reelUpload from '../middlewares/reelUpload.middleware.js';
+import { createReel, getReels, updateLikes } from '../controllers/reel.controllers.js';
+
 
 const reelRoutes = express.Router();
 
-reelRoutes.post(
-    "/",
-    isAuthenticated,
-    uploadReel.single("video"),
-    createReel
-);
+reelRoutes.post('/createReel', isAuthenticated, reelUpload.single('video'), createReel)
 
-reelRoutes.get(
-    "/",
-    isAuthenticated,
-    getReels
-);
+// GET /reel
+// Home page uses this endpoint to load the latest reels.
+reelRoutes.get('/', isAuthenticated, getReels)
+reelRoutes.post('/likes/:id', isAuthenticated, updateLikes)
 
-reelRoutes.get(
-    "/user/:username",
-    isAuthenticated,
-    getReelsByUsername
-);
 
-reelRoutes.patch(
-    "/:id/like",
-    isAuthenticated,
-    toggleReelLike
-);
 
 export default reelRoutes;
