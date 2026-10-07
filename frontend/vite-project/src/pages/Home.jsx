@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axiosInstance from "../axiosCalls/axios";
 import { useAuth } from "../context/AuthContext";
+import {useDispatch } from "react-redux";
+import { setPostsRedux } from "../redux/postSlice";
 
 function Avatar({ initials, tone = "from-slate-700 to-slate-900", size = "h-11 w-11" }) {
   return (
@@ -56,6 +58,9 @@ function Home() {
     );
   };
 
+
+  let dispatch = useDispatch()
+
   // HOME FEED FETCH:
   // Keep the flow simple: fetch posts first, then fetch reels.
   // Each request has its own error handling so one API failing does not stop
@@ -64,7 +69,8 @@ function Home() {
     const fetchPosts = async () => {
       try {
         const response = await axiosInstance.get("/post");
-        setPosts(response.data.posts || []);
+        setPosts(response.data.posts || []); // this is to be removed
+        dispatch(setPostsRedux(response.data.posts))
       } catch (error) {
         console.error("Posts fetch failed:", error);
         setFeedError(

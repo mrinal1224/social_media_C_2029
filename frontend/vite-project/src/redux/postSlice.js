@@ -10,12 +10,14 @@ const postSlice = createSlice({
   name: 'post',
   initialState,
   reducers: {
-     
+     setPostsRedux : (state , action) =>{
+         state.items = action.payload
+     }
   },
 });
 
 // 3. Export the auto-generated action creators
-export const { increment, decrement, incrementByAmount } = counterSlice.actions;
+export const {setPostsRedux} = postSlice.actions;
 
 // 4. Export the reducer function to hook up to the store
-export default counterSlice.reducer;
+export default postSlice.reducer;
