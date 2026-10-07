@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>XSS — Vulnerable Demo</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 40px auto; padding: 0 20px; }
+    textarea { width: 100%; min-height: 120px; }
+    button { margin-top: 12px; padding: 10px 16px; cursor: pointer; }
+    .post { border: 1px solid #ddd; border-radius: 12px; padding: 16px; margin-top: 20px; }
+    code { background: #f4f4f4; padding: 2px 5px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Stored XSS — Vulnerable Demo</h1>
+  <p><strong>Intentionally vulnerable.</strong> This page renders user input as HTML.</p>
+  <textarea id="comment" placeholder="Enter a comment"></textarea>
+  <br />
+  <button id="publish">Publish</button>
+
+  <div id="feed"></div>
+
+  <script>
+    const comment = document.querySelector('#comment');
+    const feed = document.querySelector('#feed');
+
+    document.querySelector('#publish').addEventListener('click', () => {
+      const value = comment.value;
+      const post = document.createElement('div');
+      post.className = 'post';
+
+      // VULNERABILITY: attacker-controlled HTML is interpreted by the browser.
+      post.innerHTML = value;
+
+      feed.prepend(post);
+      comment.value = '';
+    });
+  </script>
+</body>
+</html>

@@ -1,245 +1,213 @@
 # 00 — Project Architecture
 
-## Project map
-
-This repository is a React + Express + MongoDB social-media application.
+## Project overview
+Social Media A is a React + Express + MongoDB application with cookie-based JWT authentication, protected routes, profile management, social relationships and image upload through Multer + Cloudinary.
 
 ```text
-React
-  ↓ Axios
+React UI
+   ↓
+Axios
+   ↓
 Express
-  ↓ Router
+   ↓
+Route
+   ↓
 Middleware
-  ↓ Controller
+   ↓
+Controller
+   ↓
 Mongoose
-  ↓
+   ↓
 MongoDB
+
+File upload:
+Browser
+   ↓
+FormData
+   ↓
+Multer
+   ↓
+Cloudinary
+   ↓
+MongoDB profileImage
 ```
 
-The browser also stores the JWT in a cookie, allowing later requests to authenticate.
+## Backend structure
 
-## Server entry point
+```text
+backend/
+ ├── index.js
+ ├── controllers/
+ │    └── user.controllers.js
+ ├── models/
+ │    ├── user.model.js
+ │    └── post.model.js
+ ├── routes/
+ │    └── user.routes.js
+ ├── middlewares/
+ │    ├── authMiddleware.js
+ │    └── upload.middleware.js
+ └── utils/
+      ├── generateToken.js
+      ├── cloudinary.js
+      └── uploadToCloudinary.js
+```
 
-The backend starts from `server/index.js`:
+## Server bootstrap
 
 ```js
-const app = express()
-const PORT = 8089
+dotenv.config();
 
-dotenv.config()
+const app = express();
+const port = 8084;
 
-mongoose.connect(process.env.dbUrl)
+mongoose.connect(process.env.dbURL)
 ```
 
-Middleware order:
+CORS:
 
 ```js
 app.use(cors({
-    origin: 'http://localhost:5173',
+    origin: "http://localhost:5173",
     credentials: true
-}))
-
-app.use(express.json())
-app.use(cookieParser())
-app.use('/users', userRoutes)
+}));
 ```
 
-### Why order matters
-
-Express is a pipeline. JSON parsing and cookie parsing must exist before controllers depend on `req.body` and `req.cookies`.
-
-## Router composition
-
-The app mounts:
+Then:
 
 ```js
-app.use('/users', userRoutes)
+app.use(express.json());
+app.use(cookieParser());
+app.use("/users", userRoutes);
 ```
 
-and the router declares:
+### Why middleware order matters
 
-```js
-userRoutes.post('/register', resgiterUser)
-userRoutes.post('/login', loginUser)
-userRoutes.get('/me', isAuthenticated, getUser)
-userRoutes.get('/profile/:username', isAuthenticated, getUserProfile)
-```
-
-So the public API becomes:
+The request is a pipeline:
 
 ```text
-POST /users/register
-POST /users/login
-GET  /users/me
-GET  /users/profile/:username
+CORS
+ ↓
+JSON parsing
+ ↓
+cookie parsing
+ ↓
+router
+ ↓
+auth middleware
+ ↓
+controller
 ```
 
-## Layer responsibilities
+Authentication middleware depends on `req.cookies`, so cookie parsing must already have happened.
 
-### Route
-Maps method + URL to an operation.
-
-### Middleware
-Handles reusable checks such as authentication.
-
-### Controller
-Contains validation, database operations, password verification, token creation and response creation.
-
-### Model
-Defines the MongoDB document structure and persistence interface.
-
-## Frontend structure
+## Main API surface
 
 ```text
-src/
+POST   /users/register
+POST   /users/login
+POST   /users/logout
+GET    /users/me
+GET    /users/profile/:username
+POST   /users/:id/follow
+DELETE /users/:id/follow
+POST   /users/updateProfile
+```
+
+## MVC responsibilities
+
+Route → maps method + URL.
+
+Middleware → reusable request checks and transformations.
+
+Controller → business operation.
+
+Model → MongoDB data structure and queries.
+
+Utils → reusable infrastructure such as JWT and Cloudinary helpers.
+
+## Frontend architecture
+
+```text
+frontend/vite-project/src/
  ├── pages/
- │    ├── Landing
- │    ├── Login
- │    ├── Signup
- │    ├── Home
- │    └── Profile
- ├── context/
- │    └── AuthContext
  ├── components/
- │    ├── ProtectedRoute
- │    └── PublicRoute
+ ├── context/
  ├── axiosCalls/
- │    └── axios.js
  └── App.jsx
 ```
 
-## Shared Axios
+The Axios instance uses `withCredentials: true`, which is important because authentication is transported through cookies.
 
-```js
-export const axiosInstance = axios.create({
-    baseURL: 'http://localhost:8089/',
-    headers: {
-        'Content-Type': 'application/json'
-    },
-    withCredentials: true
-})
-```
-
-The shared client centralizes the API origin and cookie transport configuration.
-
-## Login request trace
+## Login request
 
 ```text
 Login.jsx
-  ↓
+ ↓
 axiosInstance.post('/users/login')
-  ↓
+ ↓
 Express
-  ↓
-users router
-  ↓
+ ↓
+/users router
+ ↓
 loginUser
-  ↓
-User.findOne
-  ↓
-bcrypt.compare
-  ↓
-genToken
-  ↓
-res.cookie
-  ↓
-response.userData
-  ↓
-AuthContext.setUser
-  ↓
+ ↓
+User.findOne()
+ ↓
+bcrypt.compare()
+ ↓
+generateToken()
+ ↓
+res.cookie()
+ ↓
+safe user response
+ ↓
+AuthContext.setUser()
+ ↓
 /home
 ```
 
-## Profile request trace
+## Profile update request
 
 ```text
-/profile/mrinal
-  ↓
-useParams()
-  ↓
-GET /users/profile/mrinal
-  ↓
+Profile edit form
+ ↓
+FormData
+ ↓
+POST /users/updateProfile
+ ↓
 isAuthenticated
-  ↓
-getUserProfile
-  ↓
-User.findOne({ username })
-  ↓
-profileData
-  ↓
+ ↓
+Multer
+ ↓
+updateProfile
+ ↓
+optional Cloudinary upload
+ ↓
+User.findByIdAndUpdate()
+ ↓
+response
+ ↓
 React state
 ```
 
-## Debugging by layer
+## Debugging framework
 
-UI event does not run → React.
-
-Wrong URL/body → Axios/form state.
-
-404 → route or path parameter.
-
-401 → cookie/JWT/auth middleware.
-
-500 → controller/database/runtime.
-
-Correct response but wrong UI → state/effect dependency.
+```text
+UI handler does not run → React
+Wrong URL/body → Axios/form state
+404 → route/path
+401 → cookie/JWT/auth middleware
+Multer error → multipart/file validation
+Cloudinary error → external storage/env
+500 → controller/database/runtime
+Correct response, wrong UI → React state/effect
+```
 
 ## Viva
 
-1. Why separate route and controller?
-2. Why is authentication middleware reusable?
-3. Why is AuthContext not backend security?
-4. What files participate in login?
-5. Why does `withCredentials` matter?
-
-
-## Deeper Teaching Notes
-
-### Request lifecycle
-
-Every full-stack feature can be debugged as a chain:
-
-```text
-UI event
-→ React state
-→ Axios
-→ Express route
-→ middleware
-→ controller
-→ Mongoose
-→ MongoDB
-→ HTTP response
-→ React state
-→ UI
-```
-
-### Why separation matters
-
-If a controller also renders UI, manages React state, and constructs URLs, the application becomes difficult to test and change. In this repository, each layer owns a specific concern.
-
-### Common interview distinction
-
-`ProtectedRoute` protects navigation. `isAuthenticated` protects the API. The first is a user-experience mechanism; the second is a server-side security boundary.
-
-### Status-code mental model
-
-```text
-400 → request/validation problem
-401 → authentication problem
-403 → authorization problem
-404 → route/resource not found
-409 → conflict
-500 → unexpected server failure
-```
-
-### Practical debugging checklist
-
-When a request is failing, inspect the browser Network tab first. Confirm method, URL, request payload, request cookies, response status, and response body. Then trace the same request through the Express router, middleware, controller, and database operation.
-
-### Viva questions
-
-1. Why do we need both React Router and Express Router?
-2. Why does `withCredentials: true` matter with cookie authentication?
-3. Why is `req.user` useful after authentication middleware?
-4. Why should the backend remain secure even if every React route is protected?
-5. How would you explain the complete login request to an interviewer?
+1. Why separate routes and controllers?
+2. Why does authentication belong in middleware?
+3. Why is Cloudinary upload a separate utility?
+4. Why use a shared Axios instance?
+5. Trace `/users/updateProfile` from browser to MongoDB.

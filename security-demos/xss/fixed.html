@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>XSS — Fixed Demo</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 40px auto; padding: 0 20px; }
+    textarea { width: 100%; min-height: 120px; }
+    button { margin-top: 12px; padding: 10px 16px; cursor: pointer; }
+    .post { border: 1px solid #ddd; border-radius: 12px; padding: 16px; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <h1>XSS — Fixed Demo</h1>
+  <p>User input is inserted as text, not executable HTML.</p>
+  <textarea id="comment" placeholder="Try the same payload here"></textarea>
+  <br />
+  <button id="publish">Publish</button>
+  <div id="feed"></div>
+
+  <script>
+    const comment = document.querySelector('#comment');
+    const feed = document.querySelector('#feed');
+
+    document.querySelector('#publish').addEventListener('click', () => {
+      const value = comment.value;
+      const post = document.createElement('div');
+      post.className = 'post';
+
+      // SAFE: textContent never parses the string as HTML.
+      post.textContent = value;
+
+      feed.prepend(post);
+      comment.value = '';
+    });
+  </script>
+</body>
+</html>
