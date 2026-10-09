@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axiosInstance from "../axiosCalls/axios";
 import { useAuth } from "../context/AuthContext";
-import {useDispatch } from "react-redux";
-import { setPostsRedux } from "../redux/postSlice";
+import { useDispatch, useSelector } from "react-redux";
+import { addPost, fetchFeedPosts, updatePostLike } from "../redux/postsSlice";
+import { addReel, fetchReels, updateReelLike } from "../redux/reelsSlice";
+import { addStory, fetchStories } from "../redux/storiesSlice";
 
 function Avatar({ initials, tone = "from-slate-700 to-slate-900", size = "h-11 w-11" }) {
   return (
@@ -18,12 +20,19 @@ const getLikeId = (like) => like?._id || like;
 function Home() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [posts, setPosts] = useState([]);
-  const [reels, setReels] = useState([]);
-  const [feedLoading, setFeedLoading] = useState(true);
-  const [feedError, setFeedError] = useState("");
-  const [stories, setStories] = useState([]);
-  const [storyLoading, setStoryLoading] = useState(true);
+  // Read common server state from Redux instead of keeping separate page copies.
+  const dispatch = useDispatch();
+  const posts = useSelector((state) => state.posts.items);
+  const postsLoading = useSelector((state) => state.posts.loading);
+  const postsError = useSelector((state) => state.posts.error);
+  const reels = useSelector((state) => state.reels.items);
+  const reelsLoading = useSelector((state) => state.reels.loading);
+  const reelsError = useSelector((state) => state.reels.error);
+  const stories = useSelector((state) => state.stories.items);
+  const storyLoading = useSelector((state) => state.stories.loading);
+  const storyStoreError = useSelector((state) => state.stories.error);
+  const feedLoading = postsLoading || reelsLoading;
+  const feedError = postsError || reelsError;
   const [storyError, setStoryError] = useState("");
   const [storyFile, setStoryFile] = useState(null);
   const [storyCaption, setStoryCaption] = useState("");
@@ -59,72 +68,12 @@ function Home() {
   };
 
 
-  let dispatch = useDispatch()
-
-  // HOME FEED FETCH:
-  // Keep the flow simple: fetch posts first, then fetch reels.
-  // Each request has its own error handling so one API failing does not stop
-  // the other content type from being loaded.
+  // On navigation and hard refresh, hydrate the same shared Redux resources.
   useEffect(() => {
-    const fetchPosts = async () => {
-      try {
-        const response = await axiosInstance.get("/post");
-        setPosts(response.data.posts || []); // this is to be removed
-        dispatch(setPostsRedux(response.data.posts))
-      } catch (error) {
-        console.error("Posts fetch failed:", error);
-        setFeedError(
-          error.response?.data?.message || "Unable to load posts."
-        );
-      }
-    };
-
-    const fetchReels = async () => {
-      try {
-        const response = await axiosInstance.get("/reel");
-        setReels(response.data.reels || []);
-      } catch (error) {
-        console.error("Reels fetch failed:", error);
-        setFeedError(
-          error.response?.data?.message || "Unable to load reels."
-        );
-      }
-    };
-
-    const loadFeed = async () => {
-      try {
-        setFeedLoading(true);
-        setFeedError("");
-
-        await fetchPosts();
-        await fetchReels();
-      } finally {
-        setFeedLoading(false);
-      }
-    };
-
-    loadFeed();
-  }, []);
-
-  // STORIES:
-  // Fetch active stories from people the current user follows.
-  useEffect(() => {
-    const fetchStories = async () => {
-      try {
-        setStoryLoading(true);
-        setStoryError("");
-        const response = await axiosInstance.get("/story/getStories");
-        setStories(response.data.stories || []);
-      } catch (error) {
-        console.error("Stories fetch failed:", error);
-        setStoryError(error.response?.data?.message || "Unable to load stories.");
-      } finally {
-        setStoryLoading(false);
-      }
-    };
-
-    fetchStories();
-  }, []);
+    dispatch(fetchFeedPosts());
+    dispatch(fetchReels());
+    dispatch(fetchStories());
+  }, [dispatch]);
 
   const handleCreateStory = async (event) => {
     event.preventDefault();
@@ -143,7 +92,7 @@ function Home() {
       formData.append("image", storyFile);
 
       const response = await axiosInstance.post("/story/createStory", formData);
-      setStories((prevStories) => [response.data.story, ...prevStories]);
+      dispatch(addStory(response.data.story));
       setStoryFile(null);
       setStoryCaption("");
       event.target.reset();
@@ -190,10 +139,10 @@ function Home() {
 
       if (contentType === "post") {
         const response = await axiosInstance.post("/post/create", formData);
-        setPosts((prevPosts) => [response.data.post, ...prevPosts]);
+        dispatch(addPost(response.data.post));
       } else {
         const response = await axiosInstance.post("/reel/createReel", formData);
-        setReels((prevReels) => [response.data.reel, ...prevReels]);
+        dispatch(addReel(response.data.reel));
       }
 
       setCaption("");
@@ -243,32 +192,18 @@ function Home() {
 
   const handleLike = async (type, id) => {
     const key = getItemKey(type, id);
-    const setItems = type === "post" ? setPosts : setReels;
-
     try {
       setLikeLoading((prev) => ({ ...prev, [key]: true }));
       setInteractionError((prev) => ({ ...prev, [key]: "" }));
 
+      // Group C uses POST /post/likes/:id and POST /reel/likes/:id.
       const response = await axiosInstance.post(`/${type}/likes/${id}`);
       const liked = response.data.liked;
-
-      setItems((items) =>
-        items.map((item) => {
-          if (item._id !== id) return item;
-
-          const currentLikes = item.likes || [];
-          const likesWithoutCurrentUser = currentLikes.filter(
-            (like) => getLikeId(like)?.toString() !== user?._id?.toString()
-          );
-
-          return {
-            ...item,
-            likes: liked && user?._id
-              ? [...likesWithoutCurrentUser, user._id]
-              : likesWithoutCurrentUser,
-          };
-        })
-      );
+      if (type === "post") {
+        dispatch(updatePostLike({ postId: id, userId: user?._id, liked }));
+      } else {
+        dispatch(updateReelLike({ reelId: id, userId: user?._id, liked }));
+      }
     } catch (error) {
       console.error("Like update failed:", error);
       setInteractionError((prev) => ({
@@ -609,7 +544,7 @@ function Home() {
                 </button>
               </form>
 
-              {storyError && <p className="mb-3 text-xs text-red-500">{storyError}</p>}
+              {(storyError || storyStoreError) && <p className="mb-3 text-xs text-red-500">{storyError || storyStoreError}</p>}
 
               {storyLoading ? (
                 <p className="text-xs text-slate-400">Loading stories...</p>

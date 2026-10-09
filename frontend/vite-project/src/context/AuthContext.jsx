@@ -1,44 +1,34 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import axiosInstance from "../axiosCalls/axios";
+import {
+  clearCurrentUser,
+  hydrateCurrentUser,
+  setCurrentUser,
+} from "../redux/authSlice";
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const dispatch = useDispatch();
+  const user = useSelector((state) => state.auth.user);
+  const loading = useSelector((state) => state.auth.loading);
 
   useEffect(() => {
-    let mounted = true;
+    dispatch(hydrateCurrentUser());
+  }, [dispatch]);
 
-    const checkAuth = async () => {
-      try {
-        const response = await axiosInstance.get("/users/me");
-        if (mounted) {
-          setUser(response.data);
-        }
-      } catch (error) {
-        if (mounted) {
-          setUser(null);
-        }
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    checkAuth();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  const setUser = (nextUser) => {
+    dispatch(setCurrentUser(nextUser));
+    // Obtain full profile/following data after login or registration.
+    dispatch(hydrateCurrentUser());
+  };
 
   const logout = async () => {
     try {
       await axiosInstance.post("/users/logout");
     } finally {
-      setUser(null);
+      dispatch(clearCurrentUser());
     }
   };
 
