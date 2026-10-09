@@ -8,9 +8,37 @@ import { AuthProvider } from './context/AuthContext'
 import PublicRoute from './components/PublicRoute'
 import ProtectedRoute from './components/ProtectedRoute'
 import Profile from './pages/Profile'
+import socket from './socket'
+import { useEffect } from 'react'
+
 
 
 function App() {
+
+  useEffect(() => {
+
+    socket.on("connect", () => {
+      console.log("Socket connected!");
+      console.log("Socket ID:", socket.id);
+    });
+
+    socket.on("connect_error", (error) => {
+      console.log("Connection failed:", error.message);
+    });
+
+    socket.on("disconnect", () => {
+      console.log("Socket disconnected!");
+    });
+
+    // Manually establish connection
+    socket.connect();
+
+    return () => {
+      socket.removeAllListeners();
+      socket.disconnect();
+    };
+
+  }, []);
 
 
   return (
