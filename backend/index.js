@@ -37,13 +37,18 @@ io.on("connection", (socket) => {
   
     // Receive an event from the React client
     socket.on("client-message", (data) => {
-      console.log("Message from client:", data);
-  
-      // Reply to the same client
-      socket.emit("server-message", {
-        message: "Hello React! Message received.",
+        console.log("Message from client:", data.message);
+    
+        // Reply to the same client
+        socket.emit("server-reply", {
+            message: "Hello Client! Message received."
+          });
+        
       });
-    });
+
+      
+    
+    
   
     // When the client disconnects
     socket.on("disconnect", (reason) => {

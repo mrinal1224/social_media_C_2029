@@ -22,6 +22,20 @@ function App() {
       console.log("Socket ID:", socket.id);
     });
 
+    
+
+    socket.emit("client-message", {
+      message: "Hello Server!"
+    });
+
+    const handleReply = (data) => {
+      console.log("Server replied:", data.message);
+    };
+
+    socket.on("server-reply", handleReply);
+
+ 
+
     socket.on("connect_error", (error) => {
       console.log("Connection failed:", error.message);
     });
