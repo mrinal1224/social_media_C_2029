@@ -8,56 +8,19 @@ import { AuthProvider } from './context/AuthContext'
 import PublicRoute from './components/PublicRoute'
 import ProtectedRoute from './components/ProtectedRoute'
 import Profile from './pages/Profile'
-import socket from './socket'
-import { useEffect } from 'react'
+import SocketManager from './components/SocketManager'
 
 
 
 function App() {
 
-  useEffect(() => {
-
-    socket.on("connect", () => {
-      console.log("Socket connected!");
-      console.log("Socket ID:", socket.id);
-    });
-
-    
-
-    socket.emit("client-message", {
-      message: "Hello Server!"
-    });
-
-    const handleReply = (data) => {
-      console.log("Server replied:", data.message);
-    };
-
-    socket.on("server-reply", handleReply);
-
- 
-
-    socket.on("connect_error", (error) => {
-      console.log("Connection failed:", error.message);
-    });
-
-    socket.on("disconnect", () => {
-      console.log("Socket disconnected!");
-    });
-
-    // Manually establish connection
-    socket.connect();
-
-    return () => {
-      socket.removeAllListeners();
-      socket.disconnect();
-    };
-
-  }, []);
 
 
   return (
     <>
       <AuthProvider>
+
+        <SocketManager/>
         <BrowserRouter>
           <Routes>
             <Route path='/' element={<PublicRoute><Landing /></PublicRoute>} />
